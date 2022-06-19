@@ -1,0 +1,44 @@
+[
+  {
+    "tweet_id": "50bb87b3-ad1c-48e4-b537-1b01d0dce632",
+    "content": "Hola Bienvenido, soy josdanind y esta es mi app hecha  con FastAPI.",
+    "created_at": "2022-06-19 13:20:29.663900",
+    "updated_at": null,
+    "by": {
+      "user_id": "c0f772db-838a-439f-af70-df4337d2fe78",
+      "email": "josdanind@example.com",
+      "nickname": "josdanind",
+      "first_name": "Daniel",
+      "last_name": "Navarrete",
+      "birth_date": "1989-09-10"
+    }
+  },
+  {
+    "tweet_id": "f4234e1c-a54c-4b8c-a7d5-4234f292b2fa",
+    "content": "Hola, mi nombre es Mar\u00eda.",
+    "created_at": "2022-06-19 13:23:00.793486",
+    "updated_at": null,
+    "by": {
+      "user_id": "c773ba68-3c92-4c56-892f-209c19e6f14a",
+      "email": "maria25@example.com",
+      "nickname": "maria25",
+      "first_name": "Mar\u00eda",
+      "last_name": "G\u00f3mez",
+      "birth_date": "1995-08-25"
+    }
+  },
+  {
+    "tweet_id": "1e246c49-660c-4ad2-aa7e-5068f19e9f18",
+    "content": "Hola, lindo d\u00eda para todos.",
+    "created_at": "2022-06-19 13:25:37.433800",
+    "updated_at": null,
+    "by": {
+      "user_id": "4625f782-3172-4c36-a833-5f1d5bfe58a9",
+      "email": "jesus12@example.com",
+      "nickname": "jesus12",
+      "first_name": "Esteban",
+      "last_name": "Esca\u00f1o",
+      "birth_date": "2001-01-02"
+    }
+  }
+]
