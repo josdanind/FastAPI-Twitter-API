@@ -1,20 +1,22 @@
 # Python 
-import json
 from typing import Union
-from uuid import uuid4
+from operator import itemgetter
+
+# Externals 
+from utils.encrypt import context
 
 # FastAPI
 from fastapi import APIRouter, status
 from fastapi import Body, Query, Path
 
 # Models
-from models.user import UserLogin, UserResponse, UserRegister
+from models.user import UserEntityDB, UserResponse
+from models.user import UserLoginEmail, UserUpdateData
 
-from utils.getdata import get_data
+#Database
+from db.connect_db import connect_db
 
 router = APIRouter()
-
-USER_DB = "./db/users.json"
 
 # --------------
 # Show all users 
@@ -37,8 +39,19 @@ async def home():
     - updated_at: Optional[datetime]
     - by: User
     """
-    return get_data(USER_DB)
+    # database interaction // start
+    connect_db.on = True
+    connect_db.table = "users"
+    users_data = connect_db.select_all()
+    connect_db.on = False
+    # // end
+    
+    for user in users_data:
+        del user["password"]
+        user["birth_date"] =  str(user["birth_date"])
+        user["create_at"] =  str(user["create_at"])
 
+    return users_data
 # -----------
 #  Get a user 
 # -----------
@@ -72,17 +85,19 @@ async def get_a_user(
     - birth_date: str
     - message: str
     """
+    # database interaction // start
+    connect_db.on = True
+    connect_db.table = "users"
+    user_data = connect_db.existence(
+        message="The user does not exist!",
+        error_if_exist=False,
+        nickname=nickname)
+    connect_db.on = False
+    # // end
+    user_data['birth_date'] = str(user_data['birth_date'])
+    user_data['message'] = 'User Exist!'
 
-    db  = get_data(USER_DB,
-        path={"nickname": nickname},
-        message="This user doesn't exist!")
-
-    user = db["match"]
-    user["user_id"] = str(user["user_id"])
-    user["birth_date"] = str(user["birth_date"])
-    user["message"] = "User exits!"
-
-    return  user
+    return  user_data
 
 # ----------------
 # Signup a account 
@@ -94,7 +109,7 @@ async def get_a_user(
     summary="Register a user",
     tags=["Users"]
 )
-async def signup(user: UserRegister = Body(...)):
+async def signup(user: UserEntityDB = Body(...)):
     """
     # Signup
 
@@ -114,20 +129,23 @@ async def signup(user: UserRegister = Body(...)):
     - last_name: str
     - birth_date: datetime
     """
-    data = get_data(USER_DB)
-    user_dict = user.dict()
-    user_dict["birth_date"] = str(user_dict["birth_date"])
-    user_data = {'user_id': str(uuid4())}
-    user_data = user_data | user_dict
-
-    data.append(user_data)
-
-    with open(USER_DB, "w", encoding="utf-8") as file:
-        file.write(json.dumps(data))
-
-    user_dict["message"] = "User created!"
     
-    return user_dict
+    user_dict = user.dict()
+    nickname = user_dict["nickname"]
+    user_dict["password"] = context.hash(user_dict["password"])
+    
+    # database interaction // start
+    connect_db.on = True
+    connect_db.table = "users"
+    connect_db.existence(message="User exists!", nickname=nickname)
+    connect_db.insert_content(user_dict)
+    user_data = connect_db.select_row(nickname=nickname)
+    connect_db.on = False
+    # // end
+
+    user_data['birth_date'] = str(user_data['birth_date'])
+    user_data['message'] = 'User Created!'
+    return user_data
 
 # ----------------
 # Login to account 
@@ -139,7 +157,7 @@ async def signup(user: UserRegister = Body(...)):
     summary="Login a user",
     tags=["Users"]
 )
-async def login(user: UserLogin = Body(...)):
+async def login(user: UserLoginEmail = Body(...)):
     """
     # Log in
 
@@ -161,16 +179,17 @@ async def login(user: UserLogin = Body(...)):
     """
     user_dict = user.dict()
 
-    db_users = get_data(
-        USER_DB,
-        path={"email": user_dict["email"]},
-        auth={"password": user_dict["password"]},
-        message="This user doesn't exist!")
+    # database interaction // start
+    connect_db.on = True
+    connect_db.table = "users"
+    user_data = connect_db.login_user(
+        email=user_dict["email"],
+        password=user_dict["password"]
+    )
+    connect_db.on = False
+    # // end
 
-    user = db_users["match"]
-    user["message"] = "Login success!"
-
-    return user
+    return user_data
 
 # --------------
 # Delete a users 
@@ -195,40 +214,34 @@ async def user_delete(
 ):
     """
     # Delete a User
-
     ## This path operation delete a user in the app
-    
+  
     - Path parameter: nickname
     - Query parameter: user password
-
     ## Returns a json with the basic information of the deleted user:
-
     - user_id: UUID
     - email: Emailstr
     - first_name: str
     - last_name: str
     - birth_date: datetime
     """
-    db_users = get_data(
-        USER_DB,
-        path = {"nickname": nickname},
-        auth={"password":password},
-        message="This user doesn't exist!")
 
-    user = db_users["match"]
-    user["message"] = "User Deleted!"
-
-    dict_users = list(filter(lambda x: x["nickname"] != nickname, db_users["data"]))
-
-    with open(USER_DB, "w", encoding="utf-8") as file:
-        file.write(json.dumps(dict_users))
-    
-    return user
+    # database interaction // start
+    connect_db.on = True
+    connect_db.table = "users"
+    user_data = connect_db.login_user(
+        nickname=nickname,
+        password=password,
+    )
+    connect_db.delete_row(id=user_data["id"])
+    connect_db.on = False
+    # // end
+    user_data["message"] = "The user was deleted"
+    return user_data
 
 # --------------
 # Update a users 
 # --------------
-
 @router.put(
     path="/update/{nick_name}",
     response_model=UserResponse,
@@ -237,60 +250,46 @@ async def user_delete(
     tags=["Users"]
 )
 async def update(
-    nick_name:str = Path(...),
-    password: str = Query(...),
-    new_password: Union[str, None] = Query(None),
-    nickname: Union[str, None] = Query(None),
-    first_name: Union[str, None] = Query(None),
-    last_name: Union[str, None] = Query(None), 
-    birth_date: Union[str, None] = Query(None)
+    userRequest: UserUpdateData  = Body(...),
 ):
     """
     # Update a User
-
     ## This path operation update a user's information in the app
-
     ## Parameters:
-    
+  
     - Path parameter: nickname
     - Query parameter: user password
     - Optional parameters: nickname, first_name, last_name, birth_date, new_password.
-
     ## Returns a json with the basic information of the deleted user:
-
     - user_id: UUID
     - email: Emailstr
     - first_name: str
     - last_name: str
     - birth_date: datetime
     """
-    query_dict = {
-        "nickname": nickname,
-        "password": new_password,
-        "first_name":first_name,
-        "last_name":last_name,
-        "birth_date":birth_date
-        }
 
-    db_users = get_data(
-        USER_DB,
-        path={"nickname": nick_name},
-        auth={"password":password},
-        message="This user doesn't exist!")
+    to_login, to_update = itemgetter(
+        "current_credentials",
+        "credentials_to_update"
+    )(userRequest.dict())
 
-    data = db_users["data"]
-    user = db_users["match"]
+    if to_update["password"]:
+        to_update["password"] = context.hash(to_update["password"])
 
-    index_user = list(map(lambda key: 1 if key["nickname"] == nick_name else 0, data)).index(1)
+    # database interaction // start
+    connect_db.on = True
+    connect_db.table = "users"
+    user_data = connect_db.login_user(
+        nickname=to_login["nickname"],
+        password=to_login["password"],
+    )
+    connect_db.update_row(
+        to_update,
+        id=user_data["id"])
+    user_data = connect_db.select_row(nickname=to_login["nickname"])
+    connect_db.on = False
+    # // end
 
-    for k,v in query_dict.items():
-            if not query_dict[k] == None:
-                data[index_user][k] = v
+    user_data["message"] = "Updated User!"
 
-    user = data[index_user]
-    user["message"] = "Updated user"
-
-    with open(USER_DB, "w", encoding="utf-8") as file:
-        file.write(json.dumps(data))
-
-    return user
+    return user_data

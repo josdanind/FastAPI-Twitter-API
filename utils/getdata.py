@@ -1,6 +1,8 @@
-from fastapi import HTTPException,status
+# python
 import json
 
+# fastAPI
+from fastapi import HTTPException, status
 
 def get_data(path_db, mode = 'r', path = None, auth = None, message=None):
     data = []

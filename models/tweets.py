@@ -1,25 +1,23 @@
 # Python
-from uuid import UUID
 from typing import Union
+from datetime import datetime
 
 # Pydantic
 from pydantic import BaseModel, Field
 
 # Models
-from models.user import UserID, UserLogin
+from models.user import UserBaseResponse
 
 # Tweets Model
-class Tweet(BaseModel):
-    content:str = Field(
-        ...,
-        min_length=1,
-        max_length=256
-    )
+class TweetEntityDB(BaseModel):
+    content:  str= Field(...)
 
-class TweetUpdated(Tweet):
-    user: UserLogin = Field(...)
+class TweetBaseResponse(BaseModel):
+    id: int  = Field(...)
+    content: str = Field(...)
+    created_at: datetime = Field(...)
+    updated_at: Union[datetime, None] = Field(default=None)
+    by: UserBaseResponse = Field(...)
 
-class TweetResponse(Tweet):
-    tweet_id: UUID = Field(...)
-    by: UserID = Field(...)
-    message: Union[str, None]= Field(default=None)
+class TweetResponse(TweetBaseResponse):
+    message: Union[str, None] = Field(default=None)

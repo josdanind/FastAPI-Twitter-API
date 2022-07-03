@@ -1,23 +1,30 @@
 # Python 
-import json
-from uuid import uuid4
 from datetime import datetime
+from operator import itemgetter
 
 # FastAPI
 from fastapi import APIRouter, HTTPException
 from fastapi import Body, Path, status
 
 # Models
-from models.tweets import TweetResponse, TweetUpdated
-from models.user import UserLogin
+from models.tweets import TweetEntityDB, TweetResponse
+from models.user import UserLoginNickname
 
-# utils
-from utils.getdata import get_data
+# Database
+from db.connect_db import connect_db
 
 router = APIRouter()
 
-TWEETS_DB = "./db/tweets.json"
-USER_DB = "./db/users.json"
+def tweet_response(tweet_data, user_data, message=None):
+
+    return {
+        "id": tweet_data["id"],
+        "content": tweet_data["content"],
+        "created_at": str(tweet_data["created_at"]),
+        "updated_at": tweet_data["updated_at"],
+        "by": user_data,
+        "message": message
+    }
 
 # ---------------
 # Show all tweets 
@@ -29,7 +36,39 @@ USER_DB = "./db/users.json"
     tags=["Tweets"]
 )
 async def showTweets():
-    return get_data(TWEETS_DB)
+    user_fields = "users.id, email, nickname, first_name, last_name, birth_date"
+    tweets_fields = "tweets.id, content, created_at, updated_at"
+    fields = user_fields + ", " + tweets_fields
+    table_1 = "users"
+    table_2 = "tweets"
+
+    query = (
+        f"SELECT {fields} "
+        f"FROM {table_1} INNER JOIN {table_2} "
+        f"ON {table_1}.id={table_2}.user_id;"
+    )
+
+    # database interaction // start
+    connect_db.on = True
+    connect_db.cursor.execute(query)
+    data = connect_db.cursor.fetchall()
+    column_names = [head[0] for head in connect_db.cursor.description]
+    connect_db.on = False
+    # // end
+
+    user_head = column_names[:6]
+    tweets_head = column_names[6:]
+
+    response = []
+
+    for tweet in data:
+        user_dict = dict(zip(user_head, tweet[0:6]))
+        tweet_dict = dict(zip(tweets_head, tweet[6:]))
+        dict_data = tweet_response(tweet_dict, user_dict)
+        del dict_data["message"]
+        response.append(dict_data)
+
+    return response
 
 # ------------
 # Show a tweet
@@ -42,12 +81,22 @@ async def showTweets():
     tags=["Tweets"]
 )
 async def showTweets(tweet_id:str = Path(...)):
-    data = get_data(
-        TWEETS_DB,
-        path={"tweet_id": tweet_id}
-        )
+    # database interaction // start
+    connect_db.on = True
+    connect_db.table = "tweets"
+    tweet_data = connect_db.existence(
+        id=tweet_id,
+        message="Tweet don't exist!",
+        error_if_exist=False)
+    connect_db.table = "users"
+    user_data = connect_db.select_row(id=tweet_data["user_id"])
+    connect_db.on = False
+    # // end
 
-    return data["match"]
+    return tweet_response(
+        tweet_data,
+        user_data,
+        message="Tweet exist!")
 
 # ------------
 # Post a tweet 
@@ -60,7 +109,8 @@ async def showTweets(tweet_id:str = Path(...)):
     tags=["Tweets"]
 )
 async def post(
-    tweet:TweetUpdated = Body(...)
+    userLogin: UserLoginNickname = Body(...),
+    tweet:TweetEntityDB = Body(...)
     ):
     """
     # Post a Tweet
@@ -75,143 +125,145 @@ async def post(
 
     ## return a json with de basic tweet an user information: TweetResponse model
     """
-    db_tweets = get_data(TWEETS_DB)
 
-    request = tweet.dict()
+    nickname, password = itemgetter(
+        "nickname",
+        "password"
+    )(userLogin.dict())
 
-    email = request['user']['email']
-    password = request['user']['password']
-    content =  request['content']
+    content = tweet.dict()["content"]
 
-    db_users = get_data (
-        USER_DB,
-        path={"email": email},
-        auth={"password": password},
-        message="This user doesn't exist!"
+    # database interaction // start
+    connect_db.on = True
+    connect_db.table = "users"
+    user_data = connect_db.login_user(
+        nickname=nickname,
+        password=password
     )
-    
-    user =  db_users["match"]
-
-    ordered_tweet = {'tweet_id': str(uuid4())}
-    ordered_tweet["content"] = content
-    ordered_tweet["created_at"] = str(datetime.now())
-    ordered_tweet["updated_at"] = None
-    ordered_tweet['by'] = {
-        "user_id": user["user_id"],
-        "email": user["email"],        
-        "nickname": user["nickname"],
-        "first_name": user["first_name"],
-        "last_name": user["last_name"],
-        "birth_date": user["birth_date"],
+    tweet_fields = {
+        "user_id": user_data['id'],
+        "content": content,
+        "created_at": datetime.now()
     }
+    connect_db.table = "tweets"
+    connect_db.insert_content(tweet_fields)
+    tweet_data = connect_db.select_row(
+        created_at=tweet_fields["created_at"])
+    connect_db.on = False
+    # // end
 
-    db_tweets.append(ordered_tweet)
+    return tweet_response(
+        tweet_data,
+        user_data,
+        message="Posted tweet!")
 
-    with open(TWEETS_DB, "w", encoding="utf-8") as file:
-        file.write(json.dumps(db_tweets))
-
-    ordered_tweet['message'] = "Tweet created!"
-    
-    return ordered_tweet
 
 # --------------
 # Update a tweet 
 # --------------
 @router.put(
-    path="/update/{tweet_id}",
+    path="/update/{tweetId}",
     response_model=TweetResponse,
     status_code=status.HTTP_200_OK,
     summary="Update a tweet",
     tags=["Tweets"]
 )
 async def update_tweet(
-    tweet_id: str = Path(...),
-    content: TweetUpdated = Body(...)
+    tweetId: str = Path(...),
+    userLogin: UserLoginNickname = Body(...),
+    toUpdate: TweetEntityDB = Body(...)
     ):
-    request_content = content.dict()
+    nickname, password = itemgetter(
+        "nickname",
+        "password"
+    )(userLogin.dict())
 
-    db_tweets = get_data(
-        TWEETS_DB,
-        path={"tweet_id": tweet_id},
-        message="tweet id doesn't exist!"
-        )
+    request_content = toUpdate.dict()
 
-    tweet = db_tweets["match"]
-    tweets = db_tweets["data"]    
-    
-    db_user = get_data (
-         USER_DB,
-         path={"email": request_content["user"]["email"]},
-         auth={"password": request_content["user"]["password"]},
-         message="This user doesn't exist!"
+    # database interaction // start
+    connect_db.on = True
+    connect_db.table = "users"
+    user_data = connect_db.login_user(
+        nickname=nickname,
+        password=password
     )
-
-    index_tweet = list(
-        map(lambda key: 1 if key["tweet_id"] == tweet_id else 0,
-        tweets)
-        ).index(1)
-
-    user_email_request = tweet["by"]["email"]
-    user_email = db_user["match"]["email"]
-
-    if user_email_request == user_email:
-        tweets[index_tweet]["content"] = request_content["content"]
-        tweets[index_tweet]["updated_at"] = str(datetime.now())
+    connect_db.table = "tweets"
+    data_tweet = connect_db.existence(
+        message=f"Tweet with id={tweetId} don't exist!",
+        error_if_exist=False,
+        id=tweetId
+    )
+    if data_tweet["user_id"] == user_data["id"]:
+        connect_db.update_row(
+            {
+                "content": request_content["content"],
+                "updated_at": datetime.now()
+            },
+            id=tweetId
+        )
+        data_tweet = connect_db.select_row(id=tweetId)
     else:
         raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="It is not the user corresponding to the tweet"
-                )
-    
-    with open(TWEETS_DB, "w", encoding="utf-8") as file:
-        file.write(json.dumps(tweets))
-    
-    response = tweets[index_tweet]
-    response["message"] = "Updated tweet!"
-    return response
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="This tweet isn't yours!s")
+    connect_db.on = False
+    # // end
 
+    response = tweet_response(
+        data_tweet,
+        user_data,
+        message="The tweet was updated")
+
+    return response
 
 # --------------
 # Delete a tweet 
 # --------------
 @router.delete(
-    path="/delete/{tweet_id}",
+    path="/delete/{tweetId}",
     response_model=TweetResponse,
     status_code=status.HTTP_200_OK,
     summary="Delete a tweet",
     tags=["Tweets"]
 )
 async def delete_tweet(
-    tweet_id: str = Path(...),
-    user: UserLogin = Body(...)
+    tweetId: str = Path(...),
+    userLogin: UserLoginNickname = Body(...),
+
 ):
-    user_request = user.dict()
+    nickname, password = itemgetter(
+        "nickname",
+        "password"
+    )(userLogin.dict())
 
-    db_user = get_data (
-         USER_DB,
-         path={"email": user_request["email"]},
-         auth={"password": user_request["password"]},
-         message="This user doesn't exist!"
+    # database interaction // start
+    connect_db.on = True
+    connect_db.table = "users"
+    user_data = connect_db.login_user(
+        nickname=nickname,
+        password=password
     )
+    connect_db.table = "tweets"
+    data_tweet = connect_db.existence(
+        message=f"Tweet with id={tweetId} don't exist!",
+        error_if_exist=False,
+        id=tweetId
+    )
+    if data_tweet["user_id"] == user_data["id"]:
+        connect_db.delete_row(id=tweetId)
+    else:
+        raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="This tweet isn't yours!s")
+    connect_db.on = False
+    # // end
 
-    if db_user:
-            
-        db_tweets = get_data(
-            TWEETS_DB,
-            path={"tweet_id": tweet_id},
-            message="tweet id doesn't exist!"
-            )
-        
-        tweets = db_tweets["data"]
-        tweet_dict = list(filter(lambda x: x["tweet_id"] != tweet_id, tweets))
+    response = tweet_response(
+        data_tweet,
+        user_data,
+        message="The tweet was deleted!")
 
-        with open(TWEETS_DB, "w", encoding="utf-8") as file:
-            file.write(json.dumps(tweet_dict))
-
-        tweet = db_tweets["match"]
-        tweet["message"] = "The tweet was deleted!"
-
-        return tweet
+    return response
 
 
 
