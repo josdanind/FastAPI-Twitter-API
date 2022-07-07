@@ -1,7 +1,6 @@
 # Python
-from uuid import UUID
 from typing import Optional, Union
-from datetime import date, datetime
+from datetime import date
 
 # Pydantic
 from pydantic import BaseModel, Field, EmailStr
@@ -49,15 +48,28 @@ class UserBaseResponse(BaseModel):
     )
     birth_date: Optional[Union[date, None]] = Field(default=None)
 
+    class Config:
+        orm_mode = True
+
 class UserResponse(UserBaseResponse):
     message: Union[str, None]= Field(default=None)
-class UserLoginEmail(BaseModel):
+    
+    class Config:
+        orm_mode = True
+
+class EmailUserLogin(BaseModel):
     email: EmailStr = Field(...)
     password:str = Field(...)
 
-class UserLoginNickname(BaseModel):
+    class Config:
+        orm_mode = True
+
+class NicknameUserLogin(BaseModel):
     nickname:str = Field(...)
     password:str = Field(...)
+
+    class Config:
+        orm_mode = True
 
 class UserInformationUpdate(BaseModel):
     email: Optional[Union[EmailStr, None]] = Field(default=None)
@@ -80,5 +92,5 @@ class UserInformationUpdate(BaseModel):
     password:str = Field(default=None,min_length=8)
 
 class UserUpdateData(BaseModel):
-    current_credentials: UserLoginNickname = Field(...)
+    current_credentials: NicknameUserLogin = Field(...)
     credentials_to_update: UserInformationUpdate

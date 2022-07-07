@@ -1,9 +1,15 @@
 # FastAPI
 from fastapi import FastAPI
 
+# DataBase
+from db import models
+from db.database import engine
+
 # Routes
-from routes.user import router as user_router
-from routes.tweet import router as tweet_router
+from routes.users.router import users_router
+from routes.tweets.router import tweets_router
+
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Twitter API",
@@ -18,6 +24,5 @@ def startup():
 def shutdown():
     print('Ending server')
 
-app.include_router(user_router, prefix="/users")
-app.include_router(tweet_router, prefix="/tweets")
-
+app.include_router(users_router)
+app.include_router(tweets_router)

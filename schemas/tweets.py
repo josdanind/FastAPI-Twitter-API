@@ -6,11 +6,15 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 # Models
-from models.user import UserBaseResponse
+from schemas.user import UserBaseResponse, NicknameUserLogin
 
 # Tweets Model
-class TweetEntityDB(BaseModel):
-    content:  str= Field(...)
+class TweetBase(BaseModel):
+    content: str= Field(...)
+
+class TweetUserRequest(BaseModel):
+    user_login:NicknameUserLogin
+    tweet_details:TweetBase
 
 class TweetBaseResponse(BaseModel):
     id: int  = Field(...)
