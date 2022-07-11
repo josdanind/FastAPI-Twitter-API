@@ -39,7 +39,7 @@ def post_tweet(db:Session, tweet: TweetUserRequest):
         "user_id": db_user.id,
         "content": tweet.tweet_details.content,
     }
-    db_tweet = write_row(db, 'Tweet', tweet_model)
+    db_tweet = write_row(db, 'Tweet', with_dict=tweet_model)
 
     return tweet_response(
         db_user,
@@ -64,8 +64,17 @@ def get_tweet(db: Session, **condition):
     )
 
 # --// GET ALL TWEETS
-def get_all_tweets(db:Session):
-    db_tweets = get_all(db, model='Tweet')
+def get_all_tweets(
+    db:Session,
+    page:int = 0,
+    limit:int = 5
+):
+    db_tweets = get_all(
+        db,
+        model='Tweet',
+        skip=page,
+        limit=limit
+)
     response = []
 
     for tweet in db_tweets:

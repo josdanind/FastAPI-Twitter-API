@@ -1,6 +1,8 @@
 # FastAPI
-from fastapi import Depends, status, Body, Path
-from routes.routes import users_router
+from fastapi import Depends, Query, status, Body, Path
+from fastapi import APIRouter, Response
+from fastapi.security import HTTPBasicCredentials
+
 
 # Models
 from schemas.user import UserEntityDB, UserUpdateData
@@ -11,6 +13,11 @@ from schemas.user import EmailUserLogin, NicknameUserLogin
 from sqlalchemy.orm  import Session
 from db.database import SessionLocal
 from . import db as users_table
+
+router = APIRouter(
+    prefix="/users",
+    tags=["Users"]
+)
 
 # Dependency
 def get_db():
@@ -23,12 +30,17 @@ def get_db():
 # --------------
 # Show all users 
 # --------------
-@users_router.get(
+@router.get(
     path="",
     response_model =  list[UserBaseResponse],
     status_code=status.HTTP_200_OK
 )
-async def home(db: Session = Depends(get_db)):
+async def home(
+    db: Session = Depends(get_db),
+    page:int = Query(default=0),
+    limit:int = Query(default=10)
+
+):
     """
     # Get all users
 
@@ -40,12 +52,12 @@ async def home(db: Session = Depends(get_db)):
     all the users registered in the app.
     """
 
-    return users_table.get_all_users(db)
+    return users_table.get_all_users(db, page, limit)
 
 # -----------
 #  Get a user 
 # -----------
-@users_router.get(
+@router.get(
     path="/user/{nickname}",
     response_model=UserResponse,
     status_code=status.HTTP_200_OK,
@@ -74,7 +86,7 @@ async def get_a_user(
 # ----------------
 # Signup a account 
 # ----------------
-@users_router.post(
+@router.post(
     path="/signup",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
@@ -109,7 +121,7 @@ async def signup(
 # ----------------
 # Login to account 
 # ----------------
-@users_router.post(
+@router.post(
     path="/login",
     response_model=UserResponse,
     status_code=status.HTTP_202_ACCEPTED,
@@ -144,7 +156,7 @@ async def login(
 # --------------
 # Delete a users 
 # --------------
-@users_router.delete(
+@router.delete(
     path="/delete/{nickname}",
     response_model= UserResponse,
     status_code= status.HTTP_200_OK,
@@ -157,7 +169,7 @@ async def user_delete(
     """
     # Delete a User
     ## This path operation delete a user in the app
-  
+
     - Path parameter: nickname
     - Query parameter: user password
     ## Returns a json with the basic information of the deleted user:
@@ -173,7 +185,7 @@ async def user_delete(
 # --------------
 # Update a users 
 # --------------
-@users_router.put(
+@router.put(
     path="/update/{nick_name}",
     response_model=UserResponse,
     status_code=status.HTTP_200_OK,
@@ -187,7 +199,7 @@ async def update(
     # Update a User
     ## This path operation update a user's information in the app
     ## Parameters:s
-  
+    
     - Path parameter: nickname
     - Query parameter: user password
     - Optional parameters: nickname, first_name, last_name, birth_date, new_password.

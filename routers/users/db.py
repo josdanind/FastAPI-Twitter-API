@@ -25,8 +25,17 @@ from schemas.user import NicknameUserLogin, EmailUserLogin
 #  QUERIES
 # ---------
 # --// GET ALL USERS
-def get_all_users(db: Session):
-    return get_all(db, model='User')
+def get_all_users(
+    db:Session,
+    page:int = 0,
+    limit:int = 5
+):
+    return get_all(
+        db,
+        model='User',
+        skip=page,
+        limit=limit
+    )
 
 # --// GET A USER
 def get_user(db: Session, nickname: str):
@@ -38,26 +47,6 @@ def get_user(db: Session, nickname: str):
     )
     db_user.message = "The user exists!"
 
-    return db_user
-
-# --// CREATE A USER
-def create_user(db: Session, user: UserEntityDB):
-    check_existence(
-        db,
-        model='User',
-        error_message="The user exists!",
-        nickname = user.nickname,
-        error_if_exist=True
-    )
-    
-    user_data = user.dict()
-    del user_data['password']
-    user_data['hashed_password'] = context.hash(user.password)
-    user_data['birth_date'] = str(user_data['birth_date'])
-
-    db_user = write_row(db, 'User', user_data)
-    db_user.message = 'User Created!'
-     
     return db_user
 
 # --// USER LOGIN
@@ -95,6 +84,32 @@ def delete_user(
 
     return db_user
 
+# --// CREATE A USER
+def create_user(db: Session, user: UserEntityDB):
+
+    conditions = [
+        ("nickname", "The user exists!"),
+        ("email", "There is a user with that email!")   
+    ]
+
+    for field, message in conditions:
+        check_existence(
+            db,
+            model='User',
+            error_message=message,
+            error_if_exist=True,
+            **{f"{field}": eval(f"user.{field}")}
+        )
+
+    user_data = user.dict()
+    user_data['hashed_password'] = user_data.pop('password')
+    user_data['birth_date'] = str(user_data['birth_date'])
+
+    db_user = write_row(db, 'User', with_dict= user_data)
+    db_user.message = 'User Created!'
+    
+    return db_user
+
 # --// UPDATE A USER
 def update_user(
     db: Session,
@@ -109,29 +124,9 @@ def update_user(
         value = to_update[k]
 
         if value:
-            if k == 'first_name':
-                db_user.first_name = value
-                continue
-            if k == 'email':
-                db_user.email = value
-                continue 
-            if k == 'first_name':
-                db_user.first_name = value
-                continue
-            if k == 'last_name':
-                db_user.last_name = value
-                continue
-            if k == 'birth_date':
-                db_user.first_name = value
-                continue
-            if k == 'password':
-                db_user.hashed_password = context.hash(value)
-                continue
+            exec(f"db_user.{k} = '{value}'")
 
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-
+    db_user = write_row(db,'User',withModel=db_user)
     db_user.message = "The user data was updated!"
 
     return  db_user

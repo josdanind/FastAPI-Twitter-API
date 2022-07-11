@@ -89,7 +89,7 @@ class UserInformationUpdate(BaseModel):
         max_length=50
     )
     birth_date:Optional[Union[date, None]] = Field(default=None)
-    password:str = Field(default=None,min_length=8)
+    password:Optional[Union[str, None]] = Field(default=None,min_length=8)
 
 class UserUpdateData(BaseModel):
     current_credentials: NicknameUserLogin = Field(...)

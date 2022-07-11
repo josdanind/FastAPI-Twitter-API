@@ -1,6 +1,6 @@
 # FastAPI
-from fastapi import Body, Path, status, Depends
-from routes.routes import tweets_router
+from fastapi import Body, Path, Query, status, Depends
+from fastapi import APIRouter
 
 # Schemas
 from schemas.tweets import TweetResponse, TweetBaseResponse
@@ -20,19 +20,28 @@ def get_db():
     finally:
         db.close()
 
+router = APIRouter(
+    prefix="/tweets",
+    tags=["Tweets"]
+)
+
 # --// SHOW ALL TWEETS
-@tweets_router.get(
+@router.get(
     path="",
     response_model=list[TweetBaseResponse],
     status_code=status.HTTP_200_OK,
     summary="Show all tweets",
     tags=["Tweets"]
 )
-async def showTweets(db: Session = Depends(get_db),):
-    return tweets_table.get_all_tweets(db)
+async def showTweets(
+    db: Session = Depends(get_db),
+    page:int = Query(default=0),
+    limit:int = Query(default=10)
+):
+    return tweets_table.get_all_tweets(db, page,limit)
 
 # --// SHOW A TWEET
-@tweets_router.get(
+@router.get(
     path="/{tweet_id}",
     status_code=status.HTTP_200_OK,
     summary="Show a specific tweet",
@@ -47,7 +56,7 @@ async def showTweet(
     return tweets_table.get_tweet(db, id=tweet_id)
 
 # --// POST A TWEET
-@tweets_router.post(
+@router.post(
     path="/post/{user}",
     response_model=TweetResponse,
     status_code=status.HTTP_201_CREATED,
@@ -74,7 +83,7 @@ async def post(
     return tweets_table.post_tweet(db, userRequest)
 
 # --// DELETE A TWEET
-@tweets_router.delete(
+@router.delete(
     path="/delete/{tweetId}",
     response_model=TweetResponse,
     status_code=status.HTTP_200_OK,
@@ -90,7 +99,7 @@ async def delete_tweet(
     return tweets_table.delete_tweet(db, userLogin, tweetId)
 
 # --// UPDATE A TWEET
-@tweets_router.put(
+@router.put(
     path="/update/{tweet_id}",
     response_model=TweetResponse,
     status_code=status.HTTP_200_OK,

@@ -34,10 +34,11 @@ def get_row(db: Session, model, **condition):
     ).first()
 
 # --// GET ALL ROWS
-def get_all(db: Session, model, skip:int = 0, limit:int = 100):
+def get_all(db: Session, model:str, skip:int = 0, limit:int = 10):
+    page = skip*limit
     db_data = db.query(
         eval(f'models.{model}')
-    ).offset(skip).limit(limit).all()
+    ).offset(page).limit(limit).all()
 
     return db_data
 
@@ -53,8 +54,20 @@ def delete_row(db:Session, model, **condition):
     db.commit()
 
 # --// WRITE IN A ROW
-def write_row(db:Session, model, contentModel):
-    db_data = eval(f"models.{model}(**{contentModel})")
+def write_row(
+    db:Session,
+    model,
+    with_dict=None,
+    withModel=None
+):
+    if not withModel:
+        db_data = eval(f"models.{model}(**{with_dict})")
+
+        if type(db_data) == models.User:
+            db_data.set_password(db_data.hashed_password)
+    else:
+        db_data = withModel
+
     db.add(db_data)
     db.commit()
     db.refresh(db_data)

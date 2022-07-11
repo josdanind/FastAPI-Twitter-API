@@ -1,6 +1,9 @@
 # Python
 from datetime import datetime
 
+# Utils
+from utils.encrypt import context
+
 # SQLAlchemy
 from sqlalchemy import Column,Integer, String, Date
 from sqlalchemy import ForeignKey, Date, DateTime, Text
@@ -26,6 +29,9 @@ class User(Base):
 
     tweets = relationship("Tweet", back_populates="user")
 
+    def set_password(self, password):
+        self.hashed_password = context.hash(password)
+
 # -----------
 # Tweet model
 # -----------
@@ -39,8 +45,3 @@ class Tweet(Base):
     updated_at = Column(DateTime)
 
     user = relationship("User", back_populates="tweets")
-
-
-
-
-
