@@ -1,13 +1,15 @@
-# FastAPI
-from fastapi import Depends, Query, status, Body, Path
-from fastapi import APIRouter, Response
-from fastapi.security import HTTPBasicCredentials
+# OAuth
+from utils.OAuth import create_access_token, oauth2_schema
 
+# FastAPI
+from fastapi import Query, status, Body, Path
+from fastapi import APIRouter, Depends
+from fastapi.security import OAuth2PasswordRequestForm
 
 # Models
-from schemas.user import UserEntityDB, UserUpdateData
+from schemas.user import UserTweets, UserEntityDB, UserInformation
 from schemas.user import UserResponse, UserBaseResponse
-from schemas.user import EmailUserLogin, NicknameUserLogin
+from schemas.user import UsernameLogin
 
 #  Database
 from sqlalchemy.orm  import Session
@@ -115,85 +117,45 @@ async def signup(
     - last_name: str
     - birth_date: datetime
     """
-   
+
     return users_table.create_user(db, userRequest)
 
-# ----------------
-# Login to account 
-# ----------------
+# -----------------------
+#  Login JWT to account 
+# -----------------------
 @router.post(
     path="/login",
-    response_model=UserResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Login a user"
+    status_code=status.HTTP_200_OK,
 )
-async def login(
+async def user_auth(
     db: Session = Depends(get_db),
-    emailLogin: EmailUserLogin = Body(...)
+    data: OAuth2PasswordRequestForm = Depends()
 ):
-    """
-    # Log in
+    usernameLogin = UsernameLogin(
+        nickname=data.username,
+        password=data.password
+    )
 
-    ## This path operation log in to the app
+    db_user = users_table.login_user(db, usernameLogin)
 
-    ## Parameters:
-
-    - Request body parameter: 
-
-        - user: UserRegister
-
-    ## Return a json with the basic user information:
-
-    - user_id: UUID
-    - email: Emailstr
-    - first_name: str
-    - last_name: str
-    - birth_date: datetime
-    """
-
-    return users_table.login_user(db, emailLogin)
-
-# --------------
-# Delete a users 
-# --------------
-@router.delete(
-    path="/delete/{nickname}",
-    response_model= UserResponse,
-    status_code= status.HTTP_200_OK,
-    summary="Delete a user"
-)
-async def user_delete(
-    db: Session = Depends(get_db),
-    nicknameUserLogin: NicknameUserLogin = Body(...)
-):
-    """
-    # Delete a User
-    ## This path operation delete a user in the app
-
-    - Path parameter: nickname
-    - Query parameter: user password
-    ## Returns a json with the basic information of the deleted user:
-    - user_id: UUID
-    - email: Emailstr
-    - first_name: str
-    - last_name: str
-    - birth_date: datetime
-    """
-
-    return users_table.delete_user(db, nicknameUserLogin)
+    return {
+        'access_token': create_access_token(db_user),
+        'token_type': 'Bearer'
+    }
 
 # --------------
 # Update a users 
 # --------------
 @router.put(
-    path="/update/{nick_name}",
+    path="/update",
     response_model=UserResponse,
     status_code=status.HTTP_200_OK,
     summary="update a user's information"
 )
 async def update(
     db: Session = Depends(get_db),
-    userRequest: UserUpdateData  = Body(...),
+    token:str = Depends(oauth2_schema),
+    userRequest: UserInformation  = Body(...)
 ):
     """
     # Update a User
@@ -211,4 +173,48 @@ async def update(
     - birth_date: datetime
     """
 
-    return users_table.update_user(db, userRequest)
+    return users_table.update_user(db, token, userRequest)
+
+# -------------------
+#  Get user's tweets
+# -------------------
+@router.get(
+    "/tweets",
+    response_model=list[UserTweets],
+    status_code=status.HTTP_200_OK,
+    summary="update a user's information"
+)
+async def user_tweets(
+    db: Session = Depends(get_db),
+    token:str = Depends(oauth2_schema)
+):
+    return users_table.user_tweets(db, token)
+
+# --------------
+# Delete a users 
+# --------------
+@router.delete(
+    path="/delete",
+    response_model= UserResponse,
+    status_code= status.HTTP_200_OK,
+    summary="Delete a user"
+)
+async def user_delete(
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_schema)
+):
+    """
+    # Delete a User
+    ## This path operation delete a user in the app
+
+    - Path parameter: nickname
+    - Query parameter: user password
+    ## Returns a json with the basic information of the deleted user:
+    - user_id: UUID
+    - email: Emailstr
+    - first_name: str
+    - last_name: str
+    - birth_date: datetime
+    """
+
+    return users_table.delete_user(db, token)

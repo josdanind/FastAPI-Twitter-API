@@ -13,14 +13,37 @@ from schemas.user import UserEntityDB
 # Encrypt password
 from utils.encrypt import context
 
+# OAuth
+from utils.OAuth import decode_access_token
+
 # Database Queries
 from db.queries import write_row, delete_row, get_all
 from db.queries import check_existence
 
 # Schemas
-from schemas.user import UserUpdateData
-from schemas.user import NicknameUserLogin, EmailUserLogin
+from schemas.user import UserInformation
+from schemas.user import UsernameLogin, EmailUserLogin
+from schemas.jwt import Token
 
+# -------
+#  UTILS
+# -------
+def validate_user(db:Session,token:Token):
+    jwt_data = decode_access_token(token)
+
+    if jwt_data:
+        return check_existence(
+            db,
+            'User',
+            error_message="User don't  Exists!",
+            id=jwt_data["user_id"]
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access Token invalid!",
+            headers={'WWW-Authenticate': 'Bearer'}
+            )
 # ---------
 #  QUERIES
 # ---------
@@ -52,7 +75,7 @@ def get_user(db: Session, nickname: str):
 # --// USER LOGIN
 def login_user(
     db: Session,
-    login: Union[EmailUserLogin,  NicknameUserLogin]
+    login: Union[EmailUserLogin,  UsernameLogin]
 ):
     email_login = (type(login).__name__ == 'EmailUserLogin')
     key = 'email' if email_login else 'nickname'
@@ -71,14 +94,15 @@ def login_user(
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid password")
+            detail="Invalid password"
+        )
 
 # --// DELETE A USER
 def delete_user(
     db: Session,
-    userLogin: Union[EmailUserLogin,  NicknameUserLogin]
+    token: Token
 ): 
-    db_user = login_user(db, userLogin)
+    db_user = validate_user(db, token)
     delete_row(db, 'User', id=db_user.id)
     db_user.message = "The user was deleted!"
 
@@ -113,20 +137,29 @@ def create_user(db: Session, user: UserEntityDB):
 # --// UPDATE A USER
 def update_user(
     db: Session,
-    data_user: UserUpdateData
+    token: Token,
+    toUpdate: UserInformation
 ):
-    nicknameLogin = data_user.current_credentials
-    db_user = login_user(db, nicknameLogin)
-
-    to_update = data_user.credentials_to_update.__dict__
-
+    db_user = validate_user(db, token)
+    to_update = toUpdate.__dict__
+     
     for k in to_update.keys():
         value = to_update[k]
 
-        if value:
+        if value and k != "password":
             exec(f"db_user.{k} = '{value}'")
+
+        if value and k == "password":
+            db_user.set_password(value)
 
     db_user = write_row(db,'User',withModel=db_user)
     db_user.message = "The user data was updated!"
 
     return  db_user
+
+# --// Get all user's tweets
+def user_tweets(
+    db: Session,
+    token: Token
+):
+    return validate_user(db, token).tweets

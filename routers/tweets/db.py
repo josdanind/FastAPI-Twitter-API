@@ -8,15 +8,16 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm  import Session
 
 # Schemas
-from schemas.tweets import TweetUserRequest, TweetResponse
-from schemas.user import NicknameUserLogin
+from schemas.tweets import TweetContent, TweetResponse
+from schemas.jwt import Token
 
 # Basic queries
 from db.queries import write_row, get_all, delete_row
 from db.queries import check_existence
 
 # users table queries
-from ..users.db import login_user
+from ..users.db import validate_user
+
 
 # --// Response model
 def tweet_response(db_user, db_tweet, message=None):
@@ -29,24 +30,9 @@ def tweet_response(db_user, db_tweet, message=None):
         message = message
     )
     
-# ---------
+# ----------------
 #  TWEETS QUERIES
-# ---------
-# --// POST TWEET
-def post_tweet(db:Session, tweet: TweetUserRequest):
-    db_user = login_user(db, tweet.user_login)
-    tweet_model = {
-        "user_id": db_user.id,
-        "content": tweet.tweet_details.content,
-    }
-    db_tweet = write_row(db, 'Tweet', with_dict=tweet_model)
-
-    return tweet_response(
-        db_user,
-        db_tweet,
-        message='Tweet Created!'
-    )
-
+# ----------------
 # --// GET TWEET
 def get_tweet(db: Session, **condition):
     db_tweet =  check_existence(
@@ -90,21 +76,46 @@ def get_all_tweets(
 
     return response
         
+# --// POST TWEET
+def post_tweet(db:Session, token:Token, tweet: TweetContent):
+    db_user = validate_user(db, token)
+
+    tweet_model = {
+        "user_id": db_user.id,
+        "content": tweet.content,
+    }
+
+    db_tweet = write_row(db, 'Tweet', with_dict=tweet_model)
+
+    return tweet_response(
+        db_user,
+        db_tweet,
+        message='Tweet Created!'
+    )
+
 # --// DELETE TWEET
 def delete_tweet(
     db:Session,
-    login:NicknameUserLogin,
+    token:Token,
     tweet_id:int
 ):
-    db_user = login_user(db, login)
+    db_user = validate_user(db, token)
+    
     db_tweet =  check_existence(
         db,
         'Tweet',
         error_message = "Tweet don't exists",
         id = tweet_id
     )
-    delete_row(db, 'Tweet', id=tweet_id)
-    
+
+    if db_user.id  == db_tweet.user_id:
+        delete_row(db, 'Tweet', id=tweet_id)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="The tweet isn't yours!",
+            )
+
     return tweet_response(
         db_user,
         db_tweet,
@@ -114,17 +125,19 @@ def delete_tweet(
 # --// UPDATE TWEET
 def update_tweet(
     db:Session,
-    userRequest: TweetUserRequest,
+    token: str,
+    toUpdate: TweetContent,
     tweet_id: int
 ):
-    db_user = login_user(db, userRequest.user_login)
+    db_user = validate_user(db, token)
+    
     db_tweet = check_existence(
         db,
         'Tweet',
         error_message="Tweet don't exists",
         id = tweet_id
     )
-    content =  userRequest.tweet_details.content
+    content =  toUpdate.content
 
     if db_tweet.user_id == db_user.id:
         db_tweet.content =  content
@@ -134,10 +147,8 @@ def update_tweet(
             status_code=status.HTTP_409_CONFLICT,
             detail="The tweet isn't  yours"
         )
-    
-    db.add(db_tweet)
-    db.commit()
-    db.refresh(db_tweet)
+
+    db_tweet = write_row(db, 'Tweet', withModel=db_tweet)
 
     return tweet_response(
         db_user,

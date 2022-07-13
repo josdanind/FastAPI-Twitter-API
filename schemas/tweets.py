@@ -3,25 +3,21 @@ from typing import Union
 from datetime import datetime
 
 # Pydantic
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 # Models
-from schemas.user import UserBaseResponse, NicknameUserLogin
+from schemas.user import UserBaseResponse
 
 # Tweets Model
-class TweetBase(BaseModel):
-    content: str= Field(...)
-
-class TweetUserRequest(BaseModel):
-    user_login:NicknameUserLogin
-    tweet_details:TweetBase
-
+class TweetContent(BaseModel):
+    content: str
+    
 class TweetBaseResponse(BaseModel):
-    id: int  = Field(...)
-    content: str = Field(...)
-    created_at: datetime = Field(...)
-    updated_at: Union[datetime, None] = Field(default=None)
-    by: UserBaseResponse = Field(...)
+    id: int 
+    content: str
+    created_at: datetime
+    updated_at: Union[datetime, None] = None
+    by: UserBaseResponse
 
 class TweetResponse(TweetBaseResponse):
-    message: Union[str, None] = Field(default=None)
+    message: Union[str, None] = None

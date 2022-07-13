@@ -2,10 +2,12 @@
 from fastapi import Body, Path, Query, status, Depends
 from fastapi import APIRouter
 
+# Auth
+from utils.OAuth import oauth2_schema
+
 # Schemas
 from schemas.tweets import TweetResponse, TweetBaseResponse
-from schemas.tweets import TweetUserRequest
-from schemas.user import NicknameUserLogin
+from schemas.tweets import TweetContent
 
 # Database
 from sqlalchemy.orm import Session
@@ -57,7 +59,7 @@ async def showTweet(
 
 # --// POST A TWEET
 @router.post(
-    path="/post/{user}",
+    path="/post",
     response_model=TweetResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Post a Tweet",
@@ -65,7 +67,8 @@ async def showTweet(
 )
 async def post(
     db: Session = Depends(get_db),
-    userRequest: TweetUserRequest = Body(...),
+    token:str = Depends(oauth2_schema),
+    tweetContent: TweetContent = Body(...),
     ):
     """
     # Post a Tweet
@@ -80,7 +83,7 @@ async def post(
 
     ## return a json with de basic tweet an user information: TweetResponse model
     """
-    return tweets_table.post_tweet(db, userRequest)
+    return tweets_table.post_tweet(db, token, tweetContent)
 
 # --// DELETE A TWEET
 @router.delete(
@@ -93,10 +96,9 @@ async def post(
 async def delete_tweet(
     db: Session = Depends(get_db),
     tweetId: int = Path(...),
-    userLogin: NicknameUserLogin = Body(...),
-
+    token:str = Depends(oauth2_schema),
 ):
-    return tweets_table.delete_tweet(db, userLogin, tweetId)
+    return tweets_table.delete_tweet(db, token, tweetId)
 
 # --// UPDATE A TWEET
 @router.put(
@@ -108,9 +110,9 @@ async def delete_tweet(
 )
 async def update_tweet(
     db: Session = Depends(get_db),
+    token:str = Depends(oauth2_schema),
     tweet_id: str = Path(...),
-    userRequest: TweetUserRequest = Body(...),
+    toUpdate: TweetContent = Body(...)
     ):
-    # database interaction // start
-    return tweets_table.update_tweet(db, userRequest, tweet_id)
-    # // end
+    
+    return tweets_table.update_tweet(db, token, toUpdate, tweet_id)

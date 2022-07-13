@@ -1,12 +1,15 @@
 # Python
 from typing import Optional, Union
-from datetime import date
+from datetime import date, datetime
 
 # Pydantic
 from pydantic import BaseModel, Field, EmailStr
 
+class UserOrmActive(BaseModel):
+    class Config:
+        orm_mode = True
 class UserEntityDB(BaseModel):
-    email: EmailStr = Field(...)
+    email: EmailStr
     nickname:str = Field(
         ...,
         min_length=2,
@@ -22,15 +25,15 @@ class UserEntityDB(BaseModel):
         min_length=1,
         max_length=50
     )
-    birth_date: Optional[Union[date, None]] = Field(default=None)
+    birth_date: Optional[Union[date, None]] = None
     password:str = Field(
         ...,
         min_length=8
     )
 
-class UserBaseResponse(BaseModel):
-    id:int = Field(...)
-    email: EmailStr = Field(...)
+class UserBaseResponse(UserOrmActive):
+    id:int
+    email: EmailStr
     nickname:str = Field(
         ...,
         min_length=2,
@@ -46,33 +49,19 @@ class UserBaseResponse(BaseModel):
         min_length=1,
         max_length=50
     )
-    birth_date: Optional[Union[date, None]] = Field(default=None)
-
-    class Config:
-        orm_mode = True
+    birth_date: Optional[Union[date, None]] = None
 
 class UserResponse(UserBaseResponse):
-    message: Union[str, None]= Field(default=None)
-    
-    class Config:
-        orm_mode = True
+    message: Union[str, None]= None
 
-class EmailUserLogin(BaseModel):
-    email: EmailStr = Field(...)
-    password:str = Field(...)
-
-    class Config:
-        orm_mode = True
-
-class NicknameUserLogin(BaseModel):
-    nickname:str = Field(...)
-    password:str = Field(...)
-
-    class Config:
-        orm_mode = True
-
-class UserInformationUpdate(BaseModel):
-    email: Optional[Union[EmailStr, None]] = Field(default=None)
+class EmailUserLogin(UserOrmActive):
+    email: EmailStr
+    password:str
+class UsernameLogin(UserOrmActive):
+    nickname:str
+    password:str
+class UserInformation(BaseModel):
+    email: Optional[Union[EmailStr, None]] = None
     nickname: Optional[Union[str, None]] = Field(
         default=None,
         min_length=2,
@@ -88,9 +77,11 @@ class UserInformationUpdate(BaseModel):
         min_length=1,
         max_length=50
     )
-    birth_date:Optional[Union[date, None]] = Field(default=None)
+    birth_date:Optional[Union[date, None]] = None
     password:Optional[Union[str, None]] = Field(default=None,min_length=8)
 
-class UserUpdateData(BaseModel):
-    current_credentials: NicknameUserLogin = Field(...)
-    credentials_to_update: UserInformationUpdate
+class UserTweets(UserOrmActive):
+    id: int
+    content: str
+    created_at: datetime
+    updated_at: Union[datetime, None]

@@ -1,5 +1,7 @@
 # FastAPI
 from fastapi import FastAPI, APIRouter
+from fastapi import Depends
+from fastapi.security import OAuth2PasswordRequestForm
 
 # DataBase
 from db import models
@@ -20,6 +22,12 @@ app = FastAPI(
     version='1'
 )
 
+api = APIRouter(prefix=f'/api/v{version}')
+api.include_router(users_router)
+api.include_router(tweets_router)
+
+app.include_router(api)
+
 @app.on_event('startup')
 def startup():
     print('The server is starting, welcome')
@@ -27,9 +35,3 @@ def startup():
 @app.on_event('shutdown')
 def shutdown():
     print('Ending server')
-    
-api = APIRouter(prefix=f'/api/v{version}')
-
-api.include_router(users_router)
-api.include_router(tweets_router)
-app.include_router(api)
